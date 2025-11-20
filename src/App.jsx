@@ -1,0 +1,644 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { format, subDays, differenceInDays, parseISO } from 'date-fns';
+import { Moon, Sun, Zap, Table as TableIcon, Activity, RefreshCw, TrendingDown, TrendingUp, BatteryCharging, Clock, CalendarClock, CalendarDays, History } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+// --- Utility ---
+function cn(...inputs) {
+  return twMerge(clsx(inputs));
+}
+
+// --- Constants ---
+const ROOM_CONFIG = [
+  { id: '506', color: '#fbbf24', name: 'Room 506' }, // Amber
+  { id: '507', color: '#2dd4bf', name: 'Room 507' }, // Teal
+  { id: '509', color: '#fb923c', name: 'Room 509' }, // Orange
+  { id: '510', color: '#a78bfa', name: 'Room 510' }, // Violet
+  { id: '537', color: '#f43f5e', name: 'Room 537' }, // Rose
+  { id: '538', color: '#38bdf8', name: 'Room 538' }  // Sky
+];
+
+const TIME_RANGES = [
+  { label: '24小时', days: 1 },
+  { label: '3天', days: 3 },
+  { label: '7天', days: 7 },
+  { label: '30天', days: 30 },
+];
+
+// --- Components ---
+
+const Card = ({ children, className }) => (
+  <motion.div 
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    className={cn("bg-white dark:bg-zinc-900/80 backdrop-blur-md border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl overflow-hidden", className)}
+  >
+    {children}
+  </motion.div>
+);
+
+const Badge = ({ active, color, onClick, children }) => (
+  <motion.button
+    whileHover={{ scale: 1.05 }}
+    whileTap={{ scale: 0.95 }}
+    onClick={onClick}
+    className={cn(
+      "px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-300 flex items-center gap-2 border",
+      active 
+        ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-transparent shadow-md" 
+        : "bg-transparent text-zinc-500 border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600"
+    )}
+    style={active ? { borderColor: color, backgroundColor: color + '20', color: color } : {}}
+  >
+    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+    {children}
+  </motion.button>
+);
+
+// Updated StatCard with Compact Mode support
+const StatCard = ({ title, value, subtext, icon: Icon, delay, highlight, compact }) => (
+  <motion.div 
+    initial={{ opacity: 0, x: -20 }}
+    animate={{ opacity: 1, x: 0 }}
+    transition={{ delay: delay * 0.1 }}
+    className={cn(
+      "flex flex-col rounded-xl border transition-all",
+      compact ? "p-2.5" : "p-4", // Smaller padding for compact mode
+      highlight 
+        ? "bg-blue-50/50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800" 
+        : "bg-zinc-50 dark:bg-zinc-800/50 border-zinc-100 dark:border-zinc-800/50"
+    )}
+  >
+    <div className={cn("flex items-center justify-between", compact ? "mb-1.5" : "mb-2")}>
+        <div className={cn("flex items-center gap-1.5", highlight ? "text-blue-600 dark:text-blue-400" : "text-zinc-500 dark:text-zinc-400")}>
+            <Icon size={compact ? 15 : 18} />
+            <span className={cn("font-medium", compact ? "text-xs" : "text-sm")}>{title}</span>
+        </div>
+    </div>
+    <div className={cn("font-bold truncate", compact ? "text-lg leading-tight" : "text-2xl", highlight ? "text-blue-700 dark:text-blue-300" : "text-zinc-900 dark:text-zinc-100")}>
+      {value}
+    </div>
+    <div className={cn("truncate mt-0.5", compact ? "text-[10px]" : "text-xs mt-1", highlight ? "text-blue-500/70 dark:text-blue-400/70" : "text-zinc-400")}>
+      {subtext}
+    </div>
+  </motion.div>
+);
+
+// --- Main App ---
+
+export default function App() {
+  const [darkMode, setDarkMode] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [rawData, setRawData] = useState([]);
+  const [selectedRooms, setSelectedRooms] = useState(ROOM_CONFIG.map(r => r.id));
+  const [timeRange, setTimeRange] = useState(7);
+  const [showDetails, setShowDetails] = useState(false);
+  
+  // New State: Focused Room for detailed analysis
+  const [focusedRoom, setFocusedRoom] = useState(ROOM_CONFIG[0].id);
+
+  // Effect: Handle Dark Mode
+  useEffect(() => {
+    if (darkMode) document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }, [darkMode]);
+
+  // Effect: Fetch Data
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/data');
+      const data = await res.json();
+      setRawData(data);
+    } catch (err) {
+      console.error("Failed to fetch", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 60000 * 5); // Refresh every 5 mins
+    return () => clearInterval(interval);
+  }, []);
+
+  // Memo: Process Data for Chart
+  const processedData = useMemo(() => {
+    if (!rawData.length) return [];
+
+    const now = new Date();
+    const cutoff = subDays(now, timeRange);
+    const filtered = rawData.filter(d => new Date(d.timestamp) > cutoff);
+    const groupedMap = new Map();
+
+    filtered.forEach(item => {
+      const dateObj = new Date(item.timestamp);
+      const key = format(dateObj, "yyyy-MM-dd HH:mm");
+      
+      if (!groupedMap.has(key)) {
+        groupedMap.set(key, { 
+          timestamp: dateObj.getTime(), 
+          displayTime: format(dateObj, "MM-dd HH:mm"),
+          fullDate: dateObj 
+        });
+      }
+      const entry = groupedMap.get(key);
+      entry[String(item.room_id)] = item.kWh;
+    });
+
+    return Array.from(groupedMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+  }, [rawData, timeRange]);
+
+  // Memo: Calculate Global Stats
+  const stats = useMemo(() => {
+    if (!processedData.length) return null;
+
+    const lastEntry = processedData[processedData.length - 1];
+    let maxRoom = { id: '-', val: -1 };
+    let minRoom = { id: '-', val: 9999 };
+
+    ROOM_CONFIG.forEach(r => {
+      const val = lastEntry[r.id];
+      if (val !== undefined) {
+        if (val > maxRoom.val) maxRoom = { id: r.id, val };
+        if (val < minRoom.val) minRoom = { id: r.id, val };
+      }
+    });
+
+    // Simple Daily Consumption Calculation for Stats
+    const dailyConsumption = [];
+    const dataByDay = {};
+    processedData.forEach(entry => {
+        const dayKey = format(entry.fullDate, 'yyyy-MM-dd');
+        if (!dataByDay[dayKey]) dataByDay[dayKey] = [];
+        dataByDay[dayKey].push(entry);
+    });
+
+    Object.values(dataByDay).forEach(dayEntries => {
+        if (dayEntries.length < 2) return;
+        dayEntries.sort((a, b) => a.timestamp - b.timestamp);
+        const start = dayEntries[0];
+        const end = dayEntries[dayEntries.length - 1];
+
+        ROOM_CONFIG.forEach(room => {
+            const startVal = start[room.id];
+            const endVal = end[room.id];
+            if (startVal !== undefined && endVal !== undefined) {
+                let consumed = startVal - endVal;
+                if (consumed > 0.1) { 
+                    dailyConsumption.push({ 
+                        id: room.id, 
+                        val: consumed, 
+                        date: format(start.fullDate, 'MM-dd') 
+                    });
+                }
+            }
+        });
+    });
+
+    let maxCons = { id: '-', val: 0, date: '' };
+    let minCons = { id: '-', val: 9999, date: '' };
+
+    if (dailyConsumption.length > 0) {
+        dailyConsumption.forEach(c => {
+            if (c.val > maxCons.val) maxCons = c;
+            if (c.val < minCons.val) minCons = c;
+        });
+    } else {
+        minCons.val = 0;
+    }
+
+    return {
+      maxRem: maxRoom,
+      minRem: minRoom,
+      maxCons: maxCons,
+      minCons: minCons
+    };
+  }, [processedData]);
+
+  // Memo: Calculate Single Room Details (Focused Room)
+  const focusedRoomStats = useMemo(() => {
+    if (!rawData.length || !focusedRoom) return null;
+
+    // Get all data for this room, sorted by time asc
+    const roomData = rawData
+        .filter(d => String(d.room_id) === String(focusedRoom))
+        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    
+    if (roomData.length === 0) return null;
+
+    const now = new Date();
+
+    // Helper to calculate consumption over a period
+    const calculateConsumption = (startTime) => {
+        const periodData = roomData.filter(d => new Date(d.timestamp) >= startTime);
+        let consumption = 0;
+        for (let i = 1; i < periodData.length; i++) {
+            const diff = periodData[i-1].kWh - periodData[i].kWh;
+            if (diff > 0) {
+                consumption += diff;
+            }
+        }
+        return consumption;
+    };
+
+    // 1. Calculate Last 24h Consumption
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const consumption24h = calculateConsumption(oneDayAgo);
+
+    // 2. Calculate Last 7 Days Consumption
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const consumption7d = calculateConsumption(sevenDaysAgo);
+
+    // 3. Find Last Recharge
+    let lastRechargeTime = null;
+    let lastRechargeAmount = 0;
+    
+    for (let i = roomData.length - 1; i > 0; i--) {
+        const curr = roomData[i].kWh;
+        const prev = roomData[i-1].kWh;
+        if (curr > prev + 1.0) { 
+            lastRechargeTime = roomData[i].timestamp;
+            lastRechargeAmount = curr - prev;
+            break; 
+        }
+    }
+
+    // 4. Estimate Days Remaining
+    const currentKWh = roomData[roomData.length - 1].kWh;
+    let daysRemaining = 0;
+    if (consumption24h > 0.1) {
+        daysRemaining = currentKWh / consumption24h;
+    } else {
+        daysRemaining = currentKWh / 5.0;
+    }
+
+    // 5. Days Since Last Recharge
+    let daysSinceRecharge = '-';
+    if (lastRechargeTime) {
+        daysSinceRecharge = differenceInDays(now, new Date(lastRechargeTime));
+    }
+
+    return {
+        consumption24h: consumption24h.toFixed(2),
+        consumption7d: consumption7d.toFixed(2),
+        lastRechargeDate: lastRechargeTime ? format(new Date(lastRechargeTime), 'MM-dd') : '-',
+        lastRechargeTimeFull: lastRechargeTime ? format(new Date(lastRechargeTime), 'MM-dd HH:mm') : '近期无充值',
+        lastRechargeAmount: lastRechargeAmount > 0 ? `${lastRechargeAmount.toFixed(0)}` : '-',
+        daysRemaining: daysRemaining.toFixed(1),
+        daysSinceRecharge: daysSinceRecharge,
+        currentKWh: currentKWh.toFixed(1)
+    };
+
+  }, [rawData, focusedRoom]);
+
+  const toggleRoom = (id) => {
+    setSelectedRooms(prev => 
+      prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-100 dark:bg-black text-zinc-900 dark:text-zinc-100 font-sans selection:bg-red-500/30 transition-colors duration-300">
+      
+      {/* Navigation */}
+      <nav className="sticky top-0 z-50 backdrop-blur-lg border-b border-zinc-200/50 dark:border-zinc-800/50 bg-white/70 dark:bg-black/70">
+        <div className="w-full px-6 md:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-red-600 to-rose-500 flex items-center justify-center text-white font-bold shadow-lg shadow-red-500/20">
+              N
+            </div>
+            <h1 className="text-lg font-bold tracking-tight">Nakiri <span className="text-zinc-400 font-normal">Monitor</span></h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={fetchData}
+              className="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors text-zinc-500"
+              title="Refresh Data"
+            >
+              <RefreshCw size={20} className={cn(loading && "animate-spin")} />
+            </button>
+            <button 
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-2 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors text-zinc-500"
+            >
+              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Main Content */}
+      <main className="w-full px-6 md:px-8 py-6 md:py-8">
+        
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 md:gap-8">
+          
+          {/* Left Column */}
+          <div className="xl:col-span-1 space-y-6">
+            
+            {/* Global Stats */}
+            <section>
+              <h2 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-4">当前状态</h2>
+              <div className="grid grid-cols-2 gap-3">
+                {stats && (
+                  <>
+                    <StatCard 
+                        title="最高余量" 
+                        value={`${stats.maxRem.val} kWh`} 
+                        subtext={`Room ${stats.maxRem.id}`} 
+                        icon={Zap} 
+                        delay={1} 
+                    />
+                    <StatCard 
+                        title="最低余量" 
+                        value={`${stats.minRem.val} kWh`} 
+                        subtext={`Room ${stats.minRem.id}`} 
+                        icon={Activity} 
+                        delay={2} 
+                    />
+                    <StatCard 
+                        title="单日最大消耗" 
+                        value={`${stats.maxCons.val.toFixed(1)} kWh`} 
+                        subtext={stats.maxCons.date ? `${stats.maxCons.date} (R${stats.maxCons.id})` : '暂无数据'} 
+                        icon={TrendingUp} 
+                        delay={3} 
+                    />
+                    <StatCard 
+                        title="单日最小消耗" 
+                        value={`${stats.minCons.val.toFixed(1)} kWh`} 
+                        subtext={stats.minCons.date ? `${stats.minCons.date} (R${stats.minCons.id})` : '暂无数据'} 
+                        icon={TrendingDown} 
+                        delay={4} 
+                    />
+                  </>
+                )}
+              </div>
+            </section>
+
+            {/* Room Filters */}
+            <section>
+              <h2 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                <span>房间筛选</span>
+                <span className="text-xs normal-case bg-zinc-200 dark:bg-zinc-800 px-2 py-0.5 rounded text-zinc-500">{selectedRooms.length} 选中</span>
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {ROOM_CONFIG.map(room => (
+                  <Badge 
+                    key={room.id} 
+                    color={room.color}
+                    active={selectedRooms.includes(room.id)}
+                    onClick={() => toggleRoom(room.id)}
+                  >
+                    {room.id}
+                  </Badge>
+                ))}
+              </div>
+            </section>
+            
+            {/* Time Range */}
+            <section>
+               <h2 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-4">时间范围</h2>
+               <div className="bg-zinc-200 dark:bg-zinc-900 p-1 rounded-lg flex">
+                 {TIME_RANGES.map(range => (
+                   <button
+                    key={range.days}
+                    onClick={() => setTimeRange(range.days)}
+                    className={cn(
+                      "flex-1 py-1.5 text-sm font-medium rounded-md transition-all",
+                      timeRange === range.days 
+                        ? "bg-white dark:bg-zinc-800 text-black dark:text-white shadow-sm" 
+                        : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                    )}
+                   >
+                     {range.label}
+                   </button>
+                 ))}
+               </div>
+            </section>
+
+            {/* Single Room Details - Optimized Compact Layout */}
+            <section className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
+              <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">房间详情</h2>
+                  <select 
+                    value={focusedRoom} 
+                    onChange={(e) => setFocusedRoom(e.target.value)}
+                    className="bg-zinc-100 dark:bg-zinc-900 border-none text-xs rounded-md px-2 py-1 focus:ring-1 focus:ring-zinc-500 outline-none cursor-pointer"
+                  >
+                    {ROOM_CONFIG.map(r => (
+                        <option key={r.id} value={r.id}>Room {r.id}</option>
+                    ))}
+                  </select>
+              </div>
+              
+              {/* Row 1 */}
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                {focusedRoomStats ? (
+                  <>
+                    <StatCard 
+                        title="24h消耗" 
+                        value={`${focusedRoomStats.consumption24h}`} 
+                        subtext="kWh" 
+                        icon={TrendingDown} 
+                        delay={5}
+                        highlight={true}
+                        compact={true} 
+                    />
+                    <StatCard 
+                        title="上次充值" 
+                        value={focusedRoomStats.lastRechargeDate} 
+                        subtext={focusedRoomStats.lastRechargeTimeFull.split(' ')[1] || '-'}
+                        icon={BatteryCharging} 
+                        delay={6}
+                        compact={true}
+                    />
+                    <StatCard 
+                        title="预计可用" 
+                        value={`${focusedRoomStats.daysRemaining}`} 
+                        subtext="天" 
+                        icon={CalendarClock} 
+                        delay={7}
+                        compact={true}
+                    />
+                  </>
+                ) : (
+                  <div className="col-span-3 text-center text-zinc-500 text-xs py-2">暂无数据</div>
+                )}
+              </div>
+
+              {/* Row 2 (New) */}
+              <div className="grid grid-cols-3 gap-2">
+                {focusedRoomStats && (
+                  <>
+                    <StatCard 
+                        title="7天消耗" 
+                        value={`${focusedRoomStats.consumption7d}`} 
+                        subtext="kWh" 
+                        icon={CalendarDays} 
+                        delay={8}
+                        compact={true} 
+                    />
+                    <StatCard 
+                        title="充值金额" 
+                        value={focusedRoomStats.lastRechargeAmount} 
+                        subtext="kWh (估算)"
+                        icon={Zap} 
+                        delay={9}
+                        compact={true}
+                    />
+                    <StatCard 
+                        title="距充值" 
+                        value={`${focusedRoomStats.daysSinceRecharge}`} 
+                        subtext="天" 
+                        icon={History} 
+                        delay={10}
+                        compact={true}
+                    />
+                  </>
+                )}
+              </div>
+            </section>
+
+          </div>
+
+          {/* Right Column: Chart */}
+          <div className="xl:col-span-3 space-y-6">
+            <Card className="p-6 flex flex-col h-full">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold">电量趋势</h2>
+                <div className="flex items-center gap-2 text-sm text-zinc-500">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                  Live
+                </div>
+              </div>
+
+              <div className="w-full h-[65vh] min-h-[500px]">
+                {loading ? (
+                  <div className="h-full w-full flex items-center justify-center text-zinc-400">
+                    Loading data...
+                  </div>
+                ) : processedData.length === 0 ? (
+                  <div className="h-full w-full flex items-center justify-center text-zinc-400">
+                    No data available for this range
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={processedData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                      <defs>
+                        {ROOM_CONFIG.map(room => (
+                          <linearGradient key={room.id} id={`gradient-${room.id}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor={room.color} stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor={room.color} stopOpacity={0}/>
+                          </linearGradient>
+                        ))}
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "#333" : "#eee"} vertical={false} />
+                      <XAxis 
+                        dataKey="displayTime" 
+                        stroke={darkMode ? "#666" : "#999"} 
+                        fontSize={12} 
+                        tickMargin={10}
+                        minTickGap={40}
+                      />
+                      <YAxis 
+                        width={45}
+                        stroke={darkMode ? "#666" : "#999"} 
+                        fontSize={12} 
+                        domain={['auto', 'auto']}
+                        allowDataOverflow={false} 
+                      />
+                      <Tooltip 
+                        contentStyle={{ 
+                          backgroundColor: darkMode ? 'rgba(24, 24, 27, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                          borderColor: darkMode ? '#333' : '#eee',
+                          borderRadius: '12px',
+                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                          backdropFilter: 'blur(8px)'
+                        }}
+                        itemStyle={{ fontSize: '12px', padding: '2px 0' }}
+                        labelStyle={{ color: darkMode ? '#ccc' : '#666', marginBottom: '8px' }}
+                      />
+                      {ROOM_CONFIG.map(room => (
+                         selectedRooms.includes(room.id) && (
+                           <Area 
+                              key={room.id} 
+                              type="monotone" 
+                              dataKey={room.id} 
+                              stroke={room.color} 
+                              strokeWidth={2}
+                              fill={`url(#gradient-${room.id})`}
+                              connectNulls={true}
+                              isAnimationActive={true} 
+                              animationDuration={1500}
+                              activeDot={{ r: 6, strokeWidth: 0 }}
+                           />
+                         )
+                      ))}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </Card>
+          </div>
+        </div>
+
+        {/* Detailed Data Toggle & Table */}
+        <div className="mt-8">
+            <div className="flex justify-center mb-4">
+               <button 
+                 onClick={() => setShowDetails(!showDetails)}
+                 className="flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors px-4 py-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"
+               >
+                 <TableIcon size={16} />
+                 {showDetails ? "隐藏详细数据" : "查看详细数据表"}
+               </button>
+            </div>
+
+            <AnimatePresence>
+              {showDetails && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <Card className="p-0">
+                    <div className="overflow-x-auto max-h-[500px]">
+                      <table className="w-full text-sm text-left">
+                        <thead className="bg-zinc-50 dark:bg-zinc-900 sticky top-0 z-10">
+                          <tr>
+                            <th className="p-4 font-medium text-zinc-500">时间</th>
+                            {ROOM_CONFIG.map(r => (
+                              <th key={r.id} className="p-4 font-medium text-zinc-500" style={{ color: r.color }}>
+                                {r.id}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                          {[...processedData].reverse().map((row, i) => (
+                            <tr key={i} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
+                              <td className="p-4 text-zinc-500 font-mono text-xs">{row.displayTime}</td>
+                              {ROOM_CONFIG.map(r => (
+                                <td key={r.id} className="p-4 font-medium">
+                                  {row[r.id] !== undefined ? row[r.id].toFixed(2) : '-'}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                </motion.div>
+              )}
+            </AnimatePresence>
+        </div>
+      </main>
+    </div>
+  );
+}
