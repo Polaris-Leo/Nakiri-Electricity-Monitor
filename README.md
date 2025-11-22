@@ -1,4 +1,4 @@
-Nakiri Monitor 部署指南
+# Nakiri Monitor 部署指南
 
 这里提供两种部署方案，推荐使用 方案 2（在服务器上编译），更方便后续维护。
 
@@ -16,7 +16,7 @@ Nakiri Monitor 部署指南
 
 适合大多数情况，直接上传源码，服务器自动构建。
 
-1. 文件上传
+# 1. 文件上传
 
 请排除 node_modules 和 dist 文件夹，上传项目根目录下所有其他文件到服务器：
 
@@ -48,28 +48,28 @@ Nakiri Monitor 部署指南
 
 绝对不要覆盖服务器上的 main.db（除非你想重置数据）。
 
-2. 服务器端操作
+# 2. 服务器端操作
 
 SSH 登录服务器，执行以下命令：
 
-# 1. 进入项目目录
+## 1. 进入项目目录
 cd /path/to/nakiri-monitor
 
-# 2. 安装所有依赖 (包括构建工具)
-# 注意：这里不要加 --production，因为我们需要 vite 来构建
+## 2. 安装所有依赖 (包括构建工具)
+### 注意：这里不要加 --production，因为我们需要 vite 来构建
 npm install
 
-# 3. 执行构建命令
-# 这会在服务器上生成 dist 文件夹
+## 3. 执行构建命令
+### 这会在服务器上生成 dist 文件夹
 npm run build
 
-# 4. 启动/重启服务
-# 确保你已经安装了 pm2 (sudo npm install -g pm2)
+## 4. 启动/重启服务
+### 确保你已经安装了 pm2 (sudo npm install -g pm2)
 pm2 restart nakiri-monitor
-# 如果是第一次运行: pm2 start server.js --name "nakiri-monitor"
+### 如果是第一次运行: pm2 start server.js --name "nakiri-monitor"
 
 
-3. 后续更新流程
+# 3. 后续更新流程
 
 以后你修改了代码，只需要：
 
