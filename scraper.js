@@ -16,7 +16,7 @@ const ROOM_CONFIG = [
     url: `${BASE_URL}?${BASE_PARAMS}&roomid=507`
   },
   {
-    id: '509', // 替换 512
+    id: '509',
     url: `${BASE_URL}?${BASE_PARAMS}&roomid=509`
   },
   {
