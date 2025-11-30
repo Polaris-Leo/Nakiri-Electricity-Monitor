@@ -39,7 +39,7 @@ const headers = {
 };
 
 // 从你的 main.py 提取的正则表达式
-const regex = /(\d+(\.\d+)?)度/;
+const regex = /(-?\d+(\.\d+)?)度/;
 
 // 单次抓取函数
 async function scrapeRoom(room) {
