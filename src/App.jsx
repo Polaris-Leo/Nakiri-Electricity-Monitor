@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { format, subDays, differenceInDays, parseISO } from 'date-fns';
-import { Moon, Sun, Zap, Table as TableIcon, Activity, RefreshCw, TrendingDown, TrendingUp, BatteryCharging, Clock, CalendarClock, CalendarDays, History } from 'lucide-react';
+import { Moon, Sun, Zap, Table as TableIcon, Activity, RefreshCw, TrendingDown, TrendingUp, BatteryCharging, Clock, CalendarClock, CalendarDays, History, ChevronDown, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -58,7 +58,6 @@ const Badge = ({ active, color, onClick, children }) => (
   </motion.button>
 );
 
-// Updated StatCard with Compact Mode support
 const StatCard = ({ title, value, subtext, icon: Icon, delay, highlight, compact }) => (
   <motion.div 
     initial={{ opacity: 0, x: -20 }}
@@ -87,26 +86,90 @@ const StatCard = ({ title, value, subtext, icon: Icon, delay, highlight, compact
   </motion.div>
 );
 
+// --- Custom Room Selector Component (New) ---
+const RoomSelector = ({ selected, onChange, options }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef(null);
+
+  // Click outside to close
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors shadow-sm text-zinc-700 dark:text-zinc-200"
+      >
+        <span>Room {selected}</span>
+        <ChevronDown size={14} className={cn("transition-transform duration-200", isOpen && "rotate-180")} />
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 5, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 5, scale: 0.95 }}
+            transition={{ duration: 0.1 }}
+            className="absolute right-0 mt-2 w-32 bg-white dark:bg-zinc-800 border border-zinc-100 dark:border-zinc-700 rounded-xl shadow-xl z-50 overflow-hidden p-1"
+          >
+            {options.map((room) => (
+              <button
+                key={room.id}
+                onClick={() => {
+                  onChange(room.id);
+                  setIsOpen(false);
+                }}
+                className={cn(
+                  "w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition-colors",
+                  selected === room.id 
+                    ? "bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium" 
+                    : "hover:bg-zinc-100 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300"
+                )}
+              >
+                <span>{room.id}</span>
+                {selected === room.id && <Check size={12} />}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return true; 
+  });
+  
   const [loading, setLoading] = useState(true);
   const [rawData, setRawData] = useState([]);
   const [selectedRooms, setSelectedRooms] = useState(ROOM_CONFIG.map(r => r.id));
   const [timeRange, setTimeRange] = useState(7);
   const [showDetails, setShowDetails] = useState(false);
   
-  // New State: Focused Room for detailed analysis
-  const [focusedRoom, setFocusedRoom] = useState(ROOM_CONFIG[0].id);
+  // Focused Room for detailed stats
+  const [focusedRoom, setFocusedRoom] = useState(ROOM_CONFIG.length > 0 ? ROOM_CONFIG[0].id : null);
 
-  // Effect: Handle Dark Mode
   useEffect(() => {
     if (darkMode) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
   }, [darkMode]);
 
-  // Effect: Fetch Data
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -122,11 +185,11 @@ export default function App() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60000 * 5); // Refresh every 5 mins
+    const interval = setInterval(fetchData, 60000 * 5); 
     return () => clearInterval(interval);
   }, []);
 
-  // Memo: Process Data for Chart
+  // 1. Process Data for Chart
   const processedData = useMemo(() => {
     if (!rawData.length) return [];
 
@@ -153,7 +216,7 @@ export default function App() {
     return Array.from(groupedMap.values()).sort((a, b) => a.timestamp - b.timestamp);
   }, [rawData, timeRange]);
 
-  // Memo: Calculate Global Stats
+  // 2. Calculate Global Stats
   const stats = useMemo(() => {
     if (!processedData.length) return null;
 
@@ -169,7 +232,6 @@ export default function App() {
       }
     });
 
-    // Simple Daily Consumption Calculation for Stats
     const dailyConsumption = [];
     const dataByDay = {};
     processedData.forEach(entry => {
@@ -220,11 +282,10 @@ export default function App() {
     };
   }, [processedData]);
 
-  // Memo: Calculate Single Room Details (Focused Room)
+  // 3. Calculate Focused Room Stats
   const focusedRoomStats = useMemo(() => {
     if (!rawData.length || !focusedRoom) return null;
 
-    // Get all data for this room, sorted by time asc
     const roomData = rawData
         .filter(d => String(d.room_id) === String(focusedRoom))
         .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
@@ -233,7 +294,6 @@ export default function App() {
 
     const now = new Date();
 
-    // Helper to calculate consumption over a period
     const calculateConsumption = (startTime) => {
         const periodData = roomData.filter(d => new Date(d.timestamp) >= startTime);
         let consumption = 0;
@@ -246,29 +306,24 @@ export default function App() {
         return consumption;
     };
 
-    // 1. Calculate Last 24h Consumption
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const consumption24h = calculateConsumption(oneDayAgo);
 
-    // 2. Calculate Last 7 Days Consumption
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const consumption7d = calculateConsumption(sevenDaysAgo);
 
-    // 3. Find Last Recharge
     let lastRechargeTime = null;
     let lastRechargeAmount = 0;
-    
     for (let i = roomData.length - 1; i > 0; i--) {
         const curr = roomData[i].kWh;
         const prev = roomData[i-1].kWh;
         if (curr > prev + 1.0) { 
             lastRechargeTime = roomData[i].timestamp;
             lastRechargeAmount = curr - prev;
-            break; 
+            break;
         }
     }
 
-    // 4. Estimate Days Remaining
     const currentKWh = roomData[roomData.length - 1].kWh;
     let daysRemaining = 0;
     if (consumption24h > 0.1) {
@@ -277,11 +332,9 @@ export default function App() {
         daysRemaining = currentKWh / 5.0;
     }
 
-    // 5. Days Since Last Recharge
-    let daysSinceRecharge = '-';
-    if (lastRechargeTime) {
-        daysSinceRecharge = differenceInDays(now, new Date(lastRechargeTime));
-    }
+    const daysSinceRecharge = lastRechargeTime 
+        ? differenceInDays(now, new Date(lastRechargeTime)) 
+        : '-';
 
     return {
         consumption24h: consumption24h.toFixed(2),
@@ -420,30 +473,27 @@ export default function App() {
                </div>
             </section>
 
-            {/* Single Room Details - Optimized Compact Layout */}
+            {/* Single Room Details - With Custom Dropdown */}
             <section className="pt-4 border-t border-zinc-200 dark:border-zinc-800">
               <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">房间详情</h2>
-                  <select 
-                    value={focusedRoom} 
-                    onChange={(e) => setFocusedRoom(e.target.value)}
-                    className="bg-zinc-100 dark:bg-zinc-900 border-none text-xs rounded-md px-2 py-1 focus:ring-1 focus:ring-zinc-500 outline-none cursor-pointer"
-                  >
-                    {ROOM_CONFIG.map(r => (
-                        <option key={r.id} value={r.id}>Room {r.id}</option>
-                    ))}
-                  </select>
+                  
+                  {/* 使用自定义下拉组件替换原生的 select */}
+                  <RoomSelector 
+                    selected={focusedRoom} 
+                    onChange={setFocusedRoom} 
+                    options={ROOM_CONFIG} 
+                  />
               </div>
               
-              {/* Row 1 */}
               <div className="grid grid-cols-3 gap-2 mb-2">
                 {focusedRoomStats ? (
                   <>
                     <StatCard 
                         title="24h消耗" 
-                        value={`${focusedRoomStats.consumption24h}`} 
+                        value={focusedRoomStats.consumption24h} 
                         subtext="kWh" 
-                        icon={TrendingDown} 
+                        icon={Clock} 
                         delay={5}
                         highlight={true}
                         compact={true} 
@@ -470,13 +520,12 @@ export default function App() {
                 )}
               </div>
 
-              {/* Row 2 (New) */}
               <div className="grid grid-cols-3 gap-2">
                 {focusedRoomStats && (
                   <>
                     <StatCard 
                         title="7天消耗" 
-                        value={`${focusedRoomStats.consumption7d}`} 
+                        value={focusedRoomStats.consumption7d} 
                         subtext="kWh" 
                         icon={CalendarDays} 
                         delay={8}
@@ -492,7 +541,7 @@ export default function App() {
                     />
                     <StatCard 
                         title="距充值" 
-                        value={`${focusedRoomStats.daysSinceRecharge}`} 
+                        value={focusedRoomStats.daysSinceRecharge} 
                         subtext="天" 
                         icon={History} 
                         delay={10}
@@ -568,6 +617,7 @@ export default function App() {
                               key={room.id} 
                               type="monotone" 
                               dataKey={room.id} 
+                              name="剩余电量"
                               stroke={room.color} 
                               strokeWidth={2}
                               fill={`url(#gradient-${room.id})`}
