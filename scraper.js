@@ -8,6 +8,10 @@ const BASE_PARAMS = "sysid=1&areaid=3&buildid=20"; // 固定的楼宇参数
 // ‼️ 更新并排序后的房间配置
 const ROOM_CONFIG = [
   {
+    id: '339',
+    url: `${BASE_URL}?${BASE_PARAMS}&roomid=339`
+  },
+  {
     id: '506',
     url: `${BASE_URL}?${BASE_PARAMS}&roomid=506`
   },
@@ -16,7 +20,7 @@ const ROOM_CONFIG = [
     url: `${BASE_URL}?${BASE_PARAMS}&roomid=507`
   },
   {
-    id: '509',
+    id: '509', // 替换 512
     url: `${BASE_URL}?${BASE_PARAMS}&roomid=509`
   },
   {
@@ -31,6 +35,10 @@ const ROOM_CONFIG = [
     id: '538',
     url: `${BASE_URL}?${BASE_PARAMS}&roomid=538`
   }
+  {
+    id: '627',
+    url: `${BASE_URL}?${BASE_PARAMS}&roomid=627`
+  },
 ];
 
 // 从你的 main.py 提取的 User-Agent
