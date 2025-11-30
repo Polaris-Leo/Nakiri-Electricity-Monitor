@@ -617,7 +617,6 @@ export default function App() {
                               key={room.id} 
                               type="monotone" 
                               dataKey={room.id} 
-                              name="剩余电量"
                               stroke={room.color} 
                               strokeWidth={2}
                               fill={`url(#gradient-${room.id})`}
