@@ -59,11 +59,14 @@ npm install
 
 ## 3. 执行构建命令
 ### 这会在服务器上生成 dist 文件夹
+'''
 npm run build
-
+'''
 ## 4. 启动/重启服务
 ### 确保你已经安装了 pm2 (sudo npm install -g pm2)
+'''
 pm2 restart nakiri-monitor
+'''
 ### 如果是第一次运行: pm2 start server.js --name "nakiri-monitor"
 
 
@@ -74,10 +77,10 @@ pm2 restart nakiri-monitor
 同步修改过的源码文件到服务器。
 
 在服务器执行：
-
+'''
 npm run build
 pm2 reload nakiri-monitor
-
+'''
 
 故障排查
 
