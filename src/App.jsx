@@ -13,12 +13,14 @@ function cn(...inputs) {
 
 // --- Constants ---
 const ROOM_CONFIG = [
+  { id: '339', color: '#4ade80', name: 'Room 339' }, // Green
   { id: '506', color: '#fbbf24', name: 'Room 506' }, // Amber
   { id: '507', color: '#2dd4bf', name: 'Room 507' }, // Teal
   { id: '509', color: '#fb923c', name: 'Room 509' }, // Orange
   { id: '510', color: '#a78bfa', name: 'Room 510' }, // Violet
   { id: '537', color: '#f43f5e', name: 'Room 537' }, // Rose
-  { id: '538', color: '#38bdf8', name: 'Room 538' }  // Sky
+  { id: '538', color: '#38bdf8', name: 'Room 538' }, // Sky
+  { id: '627', color: '#a855f7', name: 'Room 627' }  // Purple
 ];
 
 const TIME_RANGES = [
@@ -478,7 +480,7 @@ export default function App() {
               <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">房间详情</h2>
                   
-                  {/* 使用自定义下拉组件替换原生的 select */}
+                  {/* Replaced native select with Custom Room Selector */}
                   <RoomSelector 
                     selected={focusedRoom} 
                     onChange={setFocusedRoom} 
