@@ -34,11 +34,11 @@ const ROOM_CONFIG = [
   {
     id: '538',
     url: `${BASE_URL}?${BASE_PARAMS}&roomid=538`
-  }
+  },
   {
     id: '627',
     url: `${BASE_URL}?${BASE_PARAMS}&roomid=627`
-  },
+  }
 ];
 
 // 从你的 main.py 提取的 User-Agent
