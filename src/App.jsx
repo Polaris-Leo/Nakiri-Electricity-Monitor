@@ -148,6 +148,62 @@ const RoomSelector = ({ selected, onChange, options }) => {
   );
 };
 
+// --- Custom Tooltip Component ---
+const CustomTooltip = ({ active, payload, label, darkMode, hoveredRoom }) => {
+  if (!active || !payload || !payload.length) return null;
+
+  // Sort payload by value (descending order)
+  const sortedPayload = [...payload].sort((a, b) => (b.value || 0) - (a.value || 0));
+
+  return (
+    <div 
+      className="bg-white dark:bg-zinc-900/90 border border-zinc-200 dark:border-zinc-700 rounded-xl p-3 shadow-lg backdrop-blur-md"
+    >
+      <div className="text-xs text-zinc-600 dark:text-zinc-400 mb-2 font-medium">
+        {label}
+      </div>
+      <div className="space-y-1">
+        {sortedPayload.map((entry) => {
+          const roomConfig = ROOM_CONFIG.find(r => r.id === entry.dataKey);
+          const isHovered = entry.dataKey === hoveredRoom;
+          
+          return (
+            <div 
+              key={entry.dataKey}
+              className={cn(
+                "flex items-center justify-between gap-3 text-xs transition-all",
+                isHovered && "scale-105"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <div 
+                  className={cn(
+                    "rounded-full transition-all",
+                    isHovered ? "w-3 h-3" : "w-2 h-2"
+                  )}
+                  style={{ backgroundColor: roomConfig?.color || entry.color }}
+                />
+                <span className={cn(
+                  darkMode ? "text-zinc-200" : "text-zinc-700",
+                  isHovered && "font-bold"
+                )}>
+                  Room {entry.dataKey}
+                </span>
+              </div>
+              <span className={cn(
+                darkMode ? "text-zinc-100" : "text-zinc-900",
+                isHovered && "font-bold"
+              )}>
+                {entry.value !== undefined ? `${entry.value.toFixed(2)} kWh` : '-'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 // --- Main App ---
 
 export default function App() {
@@ -187,6 +243,9 @@ export default function App() {
   
   // Focused Room for detailed stats
   const [focusedRoom, setFocusedRoom] = useState(ROOM_CONFIG.length > 0 ? ROOM_CONFIG[0].id : null);
+  
+  // Hovered room for tooltip highlighting
+  const [hoveredRoom, setHoveredRoom] = useState(null);
 
   useEffect(() => {
     if (darkMode) document.documentElement.classList.add('dark');
@@ -599,7 +658,11 @@ export default function App() {
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={processedData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <AreaChart 
+                      data={processedData} 
+                      margin={{ top: 10, right: 20, left: 0, bottom: 0 }}
+                      onMouseLeave={() => setHoveredRoom(null)}
+                    >
                       <defs>
                         {ROOM_CONFIG.map(room => (
                           <linearGradient key={room.id} id={`gradient-${room.id}`} x1="0" y1="0" x2="0" y2="1">
@@ -623,31 +686,50 @@ export default function App() {
                         domain={['auto', 'auto']}
                         allowDataOverflow={false} 
                       />
-                      <Tooltip 
-                        contentStyle={{ 
-                          backgroundColor: darkMode ? 'rgba(24, 24, 27, 0.9)' : 'rgba(255, 255, 255, 0.9)',
-                          borderColor: darkMode ? '#333' : '#eee',
-                          borderRadius: '12px',
-                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                          backdropFilter: 'blur(8px)'
-                        }}
-                        itemStyle={{ fontSize: '12px', padding: '2px 0' }}
-                        labelStyle={{ color: darkMode ? '#ccc' : '#666', marginBottom: '8px' }}
-                      />
+                      <Tooltip content={(props) => <CustomTooltip {...props} darkMode={darkMode} hoveredRoom={hoveredRoom} />} />
                       {ROOM_CONFIG.map(room => (
                          selectedRooms.includes(room.id) && (
-                           <Area 
-                              key={room.id} 
-                              type="monotone" 
-                              dataKey={room.id} 
-                              stroke={room.color} 
-                              strokeWidth={2}
-                              fill={`url(#gradient-${room.id})`}
-                              connectNulls={true}
-                              isAnimationActive={true} 
-                              animationDuration={1500}
-                              activeDot={{ r: 6, strokeWidth: 0 }}
-                           />
+                           <React.Fragment key={room.id}>
+                             {/* Invisible wider area for better hover detection */}
+                             <Area 
+                                type="monotone" 
+                                dataKey={room.id} 
+                                stroke="transparent"
+                                strokeWidth={15}
+                                fill="transparent"
+                                connectNulls={true}
+                                isAnimationActive={false}
+                                dot={false}
+                                activeDot={false}
+                                onMouseEnter={() => setHoveredRoom(room.id)}
+                                onMouseLeave={() => setHoveredRoom(null)}
+                                hide={true}
+                             />
+                             {/* Visible area */}
+                             <Area 
+                                type="monotone" 
+                                dataKey={room.id} 
+                                stroke={room.color} 
+                                strokeWidth={hoveredRoom === room.id ? 3 : 1}
+                                fill={`url(#gradient-${room.id})`}
+                                connectNulls={true}
+                                isAnimationActive={true} 
+                                animationDuration={1500}
+                                activeDot={{
+                                  r: hoveredRoom === room.id ? 7 : 6,
+                                  strokeWidth: 0,
+                                  onMouseEnter: () => {
+                                    setHoveredRoom(room.id);
+                                  },
+                                  onMouseLeave: () => {
+                                    setHoveredRoom(null);
+                                  }
+                                }}
+                                onMouseEnter={() => setHoveredRoom(room.id)}
+                                onMouseLeave={() => setHoveredRoom(null)}
+                                style={{ pointerEvents: 'none' }}
+                             />
+                           </React.Fragment>
                          )
                       ))}
                     </AreaChart>
