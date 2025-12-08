@@ -688,7 +688,6 @@ export default function App() {
                       />
                       <Tooltip content={(props) => <CustomTooltip {...props} darkMode={darkMode} hoveredRoom={hoveredRoom} />} />
                       {ROOM_CONFIG.map(room => (
-                         selectedRooms.includes(room.id) && (
                            <React.Fragment key={room.id}>
                              {/* Invisible wider area for better hover detection */}
                              <Area 
@@ -728,9 +727,9 @@ export default function App() {
                                 onMouseEnter={() => setHoveredRoom(room.id)}
                                 onMouseLeave={() => setHoveredRoom(null)}
                                 style={{ pointerEvents: 'none' }}
+                                hide={!selectedRooms.includes(room.id)}
                              />
                            </React.Fragment>
-                         )
                       ))}
                     </AreaChart>
                   </ResponsiveContainer>
