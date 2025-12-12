@@ -242,7 +242,14 @@ export default function App() {
   const [showDetails, setShowDetails] = useState(false);
   
   // Focused Room for detailed stats
-  const [focusedRoom, setFocusedRoom] = useState(ROOM_CONFIG.length > 0 ? ROOM_CONFIG[0].id : null);
+  const [focusedRoom, setFocusedRoom] = useState(() => {
+    const preferredId = '507';
+    const hasPreferred = ROOM_CONFIG.some(r => r.id === preferredId);
+    
+    if (hasPreferred) return preferredId;
+    if (ROOM_CONFIG.length > 0) return ROOM_CONFIG[0].id;
+    return 'null';
+  });
   
   // Hovered room for tooltip highlighting
   const [hoveredRoom, setHoveredRoom] = useState(null);
