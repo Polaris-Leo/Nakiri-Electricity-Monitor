@@ -66,9 +66,10 @@ npm install
 npm run build
 ```
 ## 4. 启动/重启服务
-### 确保你已经安装了 pm2 (sudo npm install -g pm2)
+### 首次运行，确保你已经安装了 pm2 (sudo npm install -g pm2)
 ```
 pm2 start npm --name nakiri-monitor -- run start
+pm2 save
 ```
 ### 后续可通过下面的命令重启:
 ```
