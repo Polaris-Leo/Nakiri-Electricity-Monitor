@@ -50,9 +50,10 @@
 
 SSH 登录服务器，执行以下命令：
 
-## 1. 进入项目目录
+## 1. 克隆并进入项目目录
 ```
-cd /path/to/nakiri-monitor
+git clone https://github.com/Polaris-Leo/Nakiri-Electricity-Monitor.git
+cd Nakiri-Electricity-Monitor
 ```
 ## 2. 安装所有依赖 (包括构建工具)
 ### 注意：这里不要加 --production，因为我们需要 vite 来构建
@@ -67,10 +68,12 @@ npm run build
 ## 4. 启动/重启服务
 ### 确保你已经安装了 pm2 (sudo npm install -g pm2)
 ```
+pm2 start npm --name nakiri-monitor -- run start
+```
+### 后续可通过下面的命令重启:
+```
 pm2 restart nakiri-monitor
 ```
-### 如果是第一次运行: pm2 start server.js --name "nakiri-monitor"
-
 
 # 3. 后续更新流程
 
