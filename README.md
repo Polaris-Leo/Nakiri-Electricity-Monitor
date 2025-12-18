@@ -83,6 +83,8 @@ pm2 restart nakiri-monitor
 
 在服务器执行：
 ```
+cd /path/to/Nakiri-Electricity-Monitor
+git pull
 npm run build
 pm2 reload nakiri-monitor
 ```
